@@ -20,7 +20,7 @@ Three endpoints. No framework.
 ```
 GET  /       — serve the shell
 GET  /sse    — push what you see
-POST /eval     — verify, eval
+POST /     — verify, eval
 ```
 
 ## Example: [strophe-todo](https://github.com/tommy-mor/strophe-todo)
@@ -35,7 +35,7 @@ from strophe import Signer, Three, Two, Selector, MORPH, APPEND, REMOVE
 signer = Signer()
 
 def add_form():
-    return ["form", {"action": "/eval", "method": "post"},
+    return ["form", {"action": "/", "method": "post"},
         *signer.snippet_hidden("add($text)"),
         ["input", {"type": "text", "name": "text", "placeholder": "what needs doing?"}],
         ["button", {"type": "submit"}, "add"],
@@ -67,7 +67,7 @@ The `/eval` route verifies the signature and evals the snippet. `verify_snippet`
 ```python
 from strophe import SnippetExecutionError
 
-@app.post("/eval")
+@app.post("/")
 async def do(request):
     form = await request.form()
     try:
