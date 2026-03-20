@@ -77,3 +77,7 @@ GET  *      # serve the shell
 GET  */sse  # push what you see
 POST /do    # verify, eval
 ```
+
+## Example
+
+[strophe-todo](https://github.com/tommy-mor/strophe-todo) — a todo list in ~170 lines.
