@@ -1,9 +1,8 @@
 # evaleval
 
 Browser DOM is modified _ONLY_ through *javascript code snippets* sent over the wire to the browers **eval** function.
-Backend actions execute _ONLY_ through *python code snippets* sent over the wire to python's **eval** function.
 
-The entire client is 10 lines of javascript:
+Backend actions execute _ONLY_ through *python code snippets* sent over the wire to python's **eval** function.
 
 ```js
 import { Idiomorph } from 'idiomorph';
@@ -20,12 +19,18 @@ document.addEventListener('submit', async e => {
 });
 ```
 
-Three endpoints. No framework.
+```python
+from evaleval import SnippetExecutionError
 
-```
-GET  /       — serve the shell, which is just a script tag with the above js snippet.
-GET  /sse    — push js snippets to the browser, if your app has a push path.
-POST /     — verify, eval in python, return js code to be eval'd
+@app.post("/")
+async def do(request):
+    form = await request.form()
+    try:
+        snippet = signer.verify_snippet(form)
+        return eval(snippet)
+
+    except SnippetExecutionError as e:
+        return PlainTextResponse(e.message, status_code=e.status_code)
 ```
 
 ## Example: [evaleval-todo](https://github.com/tommy-mor/evaleval-todo)
@@ -98,20 +103,6 @@ These js snippets go directly into the browser's `eval` function, so you can do 
 Two[Selector("#progress-bar")][Eval(f"=> $.width = '{width}%'")]
 ```
 # Security
-
-```python
-from evaleval import SnippetExecutionError
-
-@app.post("/")
-async def do(request):
-    form = await request.form()
-    try:
-        snippet = signer.verify_snippet(form)
-        return eval(snippet)
-
-    except SnippetExecutionError as e:
-        return PlainTextResponse(e.message, status_code=e.status_code)
-```
 
 Verify snippet consumes the nonce, so for each GET you can only press each button once.
 Verify snippet checks the HMAC against the provided snippet, restricting code running on the server to be only code that the server itself produces. 
