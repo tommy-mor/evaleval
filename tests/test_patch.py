@@ -54,7 +54,7 @@ def test_morph_chain_renders_js():
     assert_bound_ref(
         js,
         'document.querySelector("#app")',
-        'Idiomorph.morph({ref}, `<div id="app">hello</div>`)',
+        '{ref} && Idiomorph.morph({ref}, "<div id=\\"app\\">hello</div>")',
     )
 
 
@@ -73,7 +73,7 @@ def test_eval_direct_code_passthrough():
 
 
 def test_eval_arrow_substitutes_selector_var():
-    js = Two[Selector("#root")][Eval("=> $.focus()")]
+    js = Two[Selector("#root")][Eval.on_selected("$.focus()")]
     assert_bound_ref(
         js,
         'document.querySelector("#root")',
@@ -82,7 +82,7 @@ def test_eval_arrow_substitutes_selector_var():
 
 
 def test_eval_arrow_without_selector_substitutes_null():
-    js = One[Eval("=> console.log($)")]
+    js = One[Eval.on_selected("console.log($)")]
     assert js == "console.log(null)"
 
 
@@ -94,17 +94,17 @@ def test_classes_add_remove_toggle_emit_expected_js():
     assert_bound_ref(
         add_js,
         'document.querySelector("#item")',
-        "{ref}?.classList.add(`on`)",
+        '{ref}?.classList.add("on")',
     )
     assert_bound_ref(
         rem_js,
         'document.querySelector("#item")',
-        "{ref}?.classList.remove(`on`)",
+        '{ref}?.classList.remove("on")',
     )
     assert_bound_ref(
         tog_js,
         'document.querySelector("#item")',
-        "{ref}?.classList.toggle(`on`)",
+        '{ref}?.classList.toggle("on")',
     )
 
 
@@ -116,23 +116,23 @@ def test_append_prepend_outer_emit_expected_js():
     assert_bound_ref(
         append_js,
         'document.querySelector("#list")',
-        "{ref}.insertAdjacentHTML('beforeend', `<li>x</li>`)",
+        '{ref}?.insertAdjacentHTML("beforeend", "<li>x</li>")',
     )
     assert_bound_ref(
         prepend_js,
         'document.querySelector("#list")',
-        "{ref}.insertAdjacentHTML('afterbegin', `<li>x</li>`)",
+        '{ref}?.insertAdjacentHTML("afterbegin", "<li>x</li>")',
     )
     assert_bound_ref(
         outer_js,
         'document.querySelector("#list")',
-        "{ref}.outerHTML = `<ul id=\"list\"><li>x</li></ul>`",
+        'if ({ref}) {ref}.outerHTML = "<ul id=\\"list\\"><li>x</li></ul>"',
     )
 
 
 def test_eval_must_be_last():
     with pytest.raises(ValueError, match="chain is already complete"):
-        _ = Three[Selector("#root")][Eval("=> $.focus()")][APPEND]
+        _ = Three[Selector("#root")][Eval.on_selected("$.focus()")][APPEND]
 
 
 def test_class_name_escaping_uses_template_literal_js():
@@ -140,7 +140,7 @@ def test_class_name_escaping_uses_template_literal_js():
     assert_bound_ref(
         js,
         'document.querySelector("#item")',
-        "{ref}?.classList.add(`it's\\ok`)",
+        '{ref}?.classList.add("it\'s\\\\ok")',
     )
 
 
@@ -154,3 +154,12 @@ def test_selector_refs_are_globally_unique():
     assert first_match is not None
     assert second_match is not None
     assert int(second_match.group(1)[1:]) == int(first_match.group(1)[1:]) + 1
+
+
+def test_selector_escaping_handles_newlines():
+    js = Two[Selector("a\nb")][REMOVE]
+    assert_bound_ref(
+        js,
+        'document.querySelector("a\\nb")',
+        "{ref}?.remove()",
+    )
