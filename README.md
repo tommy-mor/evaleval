@@ -18,16 +18,12 @@ document.addEventListener('submit', async e => {
 The entire server.
 
 ```python
+signer = Signer()
+
 @app.post("/do")
 async def do(request):
     form = await request.form()
-    snippet, sig, nonce = form['__snippet__'], form['__sig__'], form['__nonce__']
-    if not verify(snippet, nonce, sig):
-        return 403
-    if not consume_nonce(nonce):
-        return 403
-    for key, value in form.items():
-        snippet = snippet.replace(f"${key}", repr(value))
+    snippet = signer.verify_snippet(form)
     return eval(snippet)
 ```
 
@@ -37,7 +33,7 @@ Pages are data.
 def login_form():
     return ["div.login",
         ["form", {"action": "/do", "method": "post"},
-            *snippet_hidden("login($password)"),
+            *signer.snippet_hidden("login($password)"),
             ["input", {"type": "password", "name": "password"}],
             ["button", "enter"],
         ],
@@ -47,7 +43,7 @@ def login_form():
 Forms carry their own handlers. Signed, nonced, one-use.
 
 ```python
-snippet_hidden("delete_item($id)")
+signer.snippet_hidden("delete_item($id)")
 # => [
 #   ["input", {"type": "hidden", "name": "__snippet__", "value": "delete_item($id)"}],
 #   ["input", {"type": "hidden", "name": "__sig__",     "value": "a8Kj..."}],
@@ -58,7 +54,7 @@ snippet_hidden("delete_item($id)")
 The server pushes JS through SSE. The chains say how many parts they have, then become strings and disappear.
 
 ```python
-from poem import One, Three, Four, Selector, MORPH, PREPEND, CLASSES, ADD
+from strophe import One, Three, Four, Selector, MORPH, PREPEND, CLASSES, ADD
 
 Three[Selector("#events")][PREPEND][rendered]
 # => "document.querySelector(\"#events\").insertAdjacentHTML('afterbegin', `<div>...</div>`)"
