@@ -32,6 +32,7 @@ from poem.patch import (
 )
 from poem.signing import (
     Signer,
+    SnippetExecutionError,
     scrub,
     apply_snippet_substitutions,
 )
@@ -45,7 +46,7 @@ __all__ = [
     "MORPH", "PREPEND", "APPEND", "REMOVE", "OUTER", "CLASSES", "ADD", "TOGGLE",
     "DepthChain", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
     # signing
-    "Signer", "scrub", "apply_snippet_substitutions",
+    "Signer", "SnippetExecutionError", "scrub", "apply_snippet_substitutions",
     # sse
     "exec_event", "shell_html",
 ]

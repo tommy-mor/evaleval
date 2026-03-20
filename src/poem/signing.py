@@ -3,7 +3,8 @@ import hmac
 import uuid
 import time
 import base64
-
+from collections.abc import Mapping
+from typing import Any
 
 def scrub(value: str) -> str:
     """Escape a form value so it can't break out of an eval context."""
@@ -79,3 +80,31 @@ class Signer:
             ["input", {"type": "hidden", "name": "__sig__", "value": sig}],
             ["input", {"type": "hidden", "name": "__nonce__", "value": nonce}],
         ]
+
+    def execute_signed_form(self, form: Mapping[str, Any], bindings: Mapping[str, Any]):
+        """Verify and execute a signed snippet payload from form data."""
+        snippet = str(form.get("__snippet__", ""))
+        sig = str(form.get("__sig__", ""))
+        nonce = str(form.get("__nonce__", ""))
+
+        if not all([snippet, sig, nonce]):
+            raise SnippetExecutionError("Missing fields", status_code=400)
+        if not self.verify(snippet, nonce, sig):
+            raise SnippetExecutionError("Invalid signature", status_code=403)
+        if not self.consume_nonce(nonce):
+            raise SnippetExecutionError("Invalid nonce", status_code=403)
+
+        form_data = {k: str(v) for k, v in form.items() if not k.startswith("__")}
+        snippet = apply_snippet_substitutions(snippet, form_data)
+
+        try:
+            return eval(snippet, {"__builtins__": {}}, dict(bindings))
+        except Exception as e:
+            raise SnippetExecutionError(str(e), status_code=500) from e
+
+
+class SnippetExecutionError(Exception):
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
