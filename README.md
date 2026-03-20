@@ -100,7 +100,7 @@ def delete(todo_id):
 These js snippets go directly into the browser's `eval` function, so you can do whatever you want.
 
 ```python
-Two[Selector("#progress-bar")][Eval.on_selected(f"$.width = '{width}%'")]
+Two[Selector("#progress-bar")][EvalOn(f"{{sel}}.width = '{width}%'")]
 ```
 # Security
 
