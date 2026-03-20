@@ -27,7 +27,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
   try {
-    const r = await fetch(f.action, { method: 'POST', body: new URLSearchParams(new FormData(f)) });
+    const r = await fetch(f.action, { method: 'POST', body: new FormData(f) });
     const t = await r.text();
     if (t) eval(t);
   } catch (err) {

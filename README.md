@@ -9,7 +9,7 @@ const es = new EventSource('/sse');
 es.addEventListener('exec', e => eval(e.data));
 document.addEventListener('submit', async e => {
   e.preventDefault();
-  const r = await fetch(e.target.action, { method: 'POST', body: new URLSearchParams(new FormData(e.target)) });
+  const r = await fetch(e.target.action, { method: 'POST', body: new FormData(e.target) });
   const t = await r.text();
   if (t) eval(t);
 });

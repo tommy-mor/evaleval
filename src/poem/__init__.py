@@ -1,29 +1,3 @@
-"""
-poem — signed snippets, hiccup, and a dual-eval loop.
-
-The entire client:
-
-    import { Idiomorph } from 'idiomorph';
-    window.Idiomorph = Idiomorph;
-    const es = new EventSource('/sse');
-    es.addEventListener('exec', e => eval(e.data));
-    document.addEventListener('submit', async e => {
-      e.preventDefault();
-      const r = await fetch(e.target.action, {
-        method: 'POST',
-        body: new URLSearchParams(new FormData(e.target))
-      });
-      const t = await r.text();
-      if (t) eval(t);
-    });
-
-Three endpoints. No framework.
-
-    GET  *      # serve the shell
-    GET  */sse  # push what you see
-    POST /do    # verify, eval
-"""
-
 from poem.hiccup import render, RawContent, parse_tag
 from poem.patch import (
     Selector, Eval, Action,
