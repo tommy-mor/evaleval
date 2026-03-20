@@ -1,113 +1,277 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
 from evaleval.hiccup import render
 
 
+class Step:
+    pass
+
+
 @dataclass(frozen=True)
-class Selector:
+class Selector(Step):
     query: str
 
 
 @dataclass(frozen=True)
-class Eval:
+class Eval(Step):
     code: str
 
 
 @dataclass(frozen=True)
-class Action:
-    name: str
-    requires: str | None = field(default=None, compare=False, repr=False)
+class Hiccup(Step):
+    data: list | tuple
 
 
-MORPH   = Action("MORPH",   requires="Selector")
-PREPEND = Action("PREPEND", requires="Selector")
-APPEND  = Action("APPEND",  requires="Selector")
-REMOVE  = Action("REMOVE")
-OUTER   = Action("OUTER",   requires="Selector")
-CLASSES = Action("CLASSES", requires="Selector")
-ADD     = Action("ADD",     requires="CLASSES")
-TOGGLE  = Action("TOGGLE",  requires="CLASSES")
+@dataclass(frozen=True)
+class Text(Step):
+    value: str
 
 
-def _validate_step(items):
-    item = items[-1]
-    prior = items[:-1]
+@dataclass(frozen=True)
+class _Morph(Step):
+    pass
 
-    prior_actions = [x for x in prior if isinstance(x, Action)]
-    prior_action_names = {a.name for a in prior_actions}
-    has_selector = any(isinstance(x, Selector) for x in prior)
-    has_data = any(not isinstance(x, (Selector, Action, Eval)) for x in prior)
 
-    if has_data:
-        raise ValueError("Data must be the last item in the chain")
+@dataclass(frozen=True)
+class _Prepend(Step):
+    pass
 
+
+@dataclass(frozen=True)
+class _Append(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _Outer(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _Classes(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _Add(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _Toggle(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _Remove(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _NodeRemove(Step):
+    pass
+
+
+@dataclass(frozen=True)
+class _ClassRemove(Step):
+    pass
+
+
+MORPH = _Morph()
+PREPEND = _Prepend()
+APPEND = _Append()
+REMOVE = _Remove()
+OUTER = _Outer()
+CLASSES = _Classes()
+ADD = _Add()
+TOGGLE = _Toggle()
+
+
+def _step_name(step):
+    match step:
+        case Selector():
+            return "Selector"
+        case Eval():
+            return "Eval"
+        case Hiccup() | Text():
+            return "data"
+        case _Morph():
+            return "MORPH"
+        case _Prepend():
+            return "PREPEND"
+        case _Append():
+            return "APPEND"
+        case _Outer():
+            return "OUTER"
+        case _Classes():
+            return "CLASSES"
+        case _Add():
+            return "ADD"
+        case _Toggle():
+            return "TOGGLE"
+        case _Remove() | _NodeRemove() | _ClassRemove():
+            return "REMOVE"
+        case _:
+            return type(step).__name__
+
+
+def _coerce_step(item, previous):
     match item:
-        case Selector() if prior_actions:
-            raise ValueError(f"Selector must come before actions, not after {prior_actions[-1].name}")
-        case Action(name=name) if name in ("MORPH", "PREPEND", "APPEND", "OUTER", "CLASSES") and not has_selector:
-            raise ValueError(f"{name} requires a Selector before it")
-        case Action(name=name) if name in ("ADD", "TOGGLE") and "CLASSES" not in prior_action_names:
-            raise ValueError(f"{name} requires CLASSES before it")
-        case Action(name="REMOVE") if prior_actions and "CLASSES" not in prior_action_names:
-            raise ValueError(f"Selector must come before actions, not after {prior_actions[-1].name}")
+        case Step():
+            if item is REMOVE:
+                if isinstance(previous, _Classes):
+                    return _ClassRemove()
+                return _NodeRemove()
+            return item
+        case list() | tuple():
+            return Hiccup(item)
+        case str():
+            return Text(item)
+        case _:
+            raise TypeError(f"Cannot use {type(item).__name__} in patch chain")
 
 
-def _sel_expr(query):
+def _validate_transition(previous, current):
+    match previous, current:
+        case None, Selector() | Eval():
+            return
+        case None, _NodeRemove():
+            raise ValueError("REMOVE requires a Selector before it")
+        case None, _Morph() | _Prepend() | _Append() | _Outer() | _Classes():
+            raise ValueError(f"{_step_name(current)} requires a Selector before it")
+        case None, _Add() | _ClassRemove() | _Toggle():
+            raise ValueError(f"{_step_name(current)} requires CLASSES before it")
+        case None, Hiccup() | Text():
+            raise ValueError("Data must follow an action")
+
+        case Hiccup() | Text(), _:
+            raise ValueError("Data must be the last item in the chain")
+        case Eval() | _NodeRemove(), _:
+            raise ValueError(f"{_step_name(previous)} must be the last item in the chain")
+
+        case Selector(), _Morph() | _Prepend() | _Append() | _Outer() | _NodeRemove() | _Classes() | Eval():
+            return
+        case Selector(), _Add() | _ClassRemove() | _Toggle():
+            raise ValueError(f"{_step_name(current)} requires CLASSES before it")
+        case _Classes(), _Add() | _ClassRemove() | _Toggle():
+            return
+        case _Morph() | _Prepend() | _Append() | _Outer(), Hiccup() | Text():
+            return
+        case _Add() | _ClassRemove() | _Toggle(), Text():
+            return
+
+        case _:
+            raise ValueError(f"{_step_name(current)} cannot follow {_step_name(previous)}")
+
+
+def _selector_expr(query):
     safe = query.replace("\\", "\\\\").replace('"', '\\"')
     return f'document.querySelector("{safe}")'
 
 
-def _to_html(data):
-    if data is None:
-        return ""
-    raw = render(data) if not isinstance(data, str) else data
-    return raw.replace("`", "\\`").replace("${", "\\${")
+def _js_template_text(text):
+    return text.replace("`", "\\`").replace("${", "\\${")
 
 
-def _compile(items):
-    selector  = next((x for x in items if isinstance(x, Selector)), None)
-    eval_node = next((x for x in items if isinstance(x, Eval)), None)
-    actions   = [x for x in items if isinstance(x, Action)]
-    data      = next((x for x in items if not isinstance(x, (Selector, Action, Eval))), None)
+def _js_single_quote(text):
+    return (
+        text.replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
 
-    lines = []
-    ref = "null"
 
-    if selector:
-        ref = "_0"
-        lines.append(f"const _0 = {_sel_expr(selector.query)}")
+def _render_payload(payload):
+    match payload:
+        case Hiccup(data):
+            raw = render(data)
+        case Text(value):
+            raw = value
+        case _:
+            raise ValueError(f"Unsupported payload: {payload!r}")
+    return _js_template_text(raw)
 
-    if eval_node:
-        code = eval_node.code
-        if code.startswith("=>"):
-            lines.append(code[2:].strip().replace("$", ref))
-        else:
-            lines.append(code)
-        return ";\n".join(lines)
 
-    html = _to_html(data)
+def _lower_eval(code, ref):
+    if code.startswith("=>"):
+        return code[2:].strip().replace("$", ref)
+    return code
 
-    match tuple(a.name for a in actions):
-        case ("REMOVE",):                  lines.append(f"{ref}?.remove()")
-        case ("MORPH",):                   lines.append(f"Idiomorph.morph({ref}, `{html}`)")
-        case ("PREPEND",):                 lines.append(f"{ref}.insertAdjacentHTML('afterbegin', `{html}`)")
-        case ("APPEND",):                  lines.append(f"{ref}.insertAdjacentHTML('beforeend', `{html}`)")
-        case ("OUTER",):                   lines.append(f"{ref}.outerHTML = `{html}`")
-        case ("CLASSES", "ADD"):           lines.append(f"{ref}?.classList.add('{data}')")
-        case ("CLASSES", "REMOVE"):        lines.append(f"{ref}?.classList.remove('{data}')")
-        case ("CLASSES", "TOGGLE"):        lines.append(f"{ref}?.classList.toggle('{data}')")
-        case _:                            lines.append("console.warn('unresolved patch chain')")
 
-    return ";\n".join(lines)
+def _compile(steps):
+    match steps:
+        case (Eval(code),):
+            return _lower_eval(code, "null")
+
+        case (Selector(query), Eval(code)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                _lower_eval(code, "_0"),
+            ])
+
+        case (Selector(query), _NodeRemove()):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                "_0?.remove()",
+            ])
+
+        case (Selector(query), _Morph(), payload) if isinstance(payload, (Hiccup, Text)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"Idiomorph.morph(_0, `{_render_payload(payload)}`)",
+            ])
+
+        case (Selector(query), _Prepend(), payload) if isinstance(payload, (Hiccup, Text)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0.insertAdjacentHTML('afterbegin', `{_render_payload(payload)}`)",
+            ])
+
+        case (Selector(query), _Append(), payload) if isinstance(payload, (Hiccup, Text)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0.insertAdjacentHTML('beforeend', `{_render_payload(payload)}`)",
+            ])
+
+        case (Selector(query), _Outer(), payload) if isinstance(payload, (Hiccup, Text)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0.outerHTML = `{_render_payload(payload)}`",
+            ])
+
+        case (Selector(query), _Classes(), _Add(), Text(value)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0?.classList.add('{_js_single_quote(value)}')",
+            ])
+
+        case (Selector(query), _Classes(), _ClassRemove(), Text(value)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0?.classList.remove('{_js_single_quote(value)}')",
+            ])
+
+        case (Selector(query), _Classes(), _Toggle(), Text(value)):
+            return ";\n".join([
+                f"const _0 = {_selector_expr(query)}",
+                f"_0?.classList.toggle('{_js_single_quote(value)}')",
+            ])
+
+        case _:
+            return "console.warn('unresolved patch chain')"
 
 
 class DepthChain:
     def __init__(self, depth, items=None):
         self.depth = depth
-        self.items = items or []
+        self.items = tuple(items or ())
 
     def __getitem__(self, item):
-        items = self.items + [item]
-        _validate_step(items)
+        previous = self.items[-1] if self.items else None
+        current = _coerce_step(item, previous)
+        _validate_transition(previous, current)
+        items = self.items + (current,)
         if len(items) >= self.depth:
             return _compile(items)
         return DepthChain(self.depth, items)

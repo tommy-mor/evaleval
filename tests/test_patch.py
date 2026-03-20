@@ -19,8 +19,8 @@ from evaleval.patch import (
 
 
 def test_selector_must_precede_actions():
-    with pytest.raises(ValueError, match="Selector must come before actions"):
-        _ = Two[REMOVE][Selector("#app")]
+    with pytest.raises(ValueError, match="REMOVE requires a Selector"):
+        _ = One[REMOVE]
 
 
 def test_action_requires_selector():
@@ -35,7 +35,7 @@ def test_add_requires_classes_first():
 
 def test_data_must_be_last():
     with pytest.raises(ValueError, match="Data must be the last item"):
-        _ = Three[Selector("#x")][{"bad": "data"}][MORPH]
+        _ = Four[Selector("#x")][MORPH][["div"]][APPEND]
 
 
 def test_morph_chain_renders_js():
@@ -81,3 +81,13 @@ def test_append_prepend_outer_emit_expected_js():
     assert append_js  == "const _0 = document.querySelector(\"#list\");\n_0.insertAdjacentHTML('beforeend', `<li>x</li>`)"
     assert prepend_js == "const _0 = document.querySelector(\"#list\");\n_0.insertAdjacentHTML('afterbegin', `<li>x</li>`)"
     assert outer_js   == 'const _0 = document.querySelector("#list");\n_0.outerHTML = `<ul id="list"><li>x</li></ul>`'
+
+
+def test_eval_must_be_last():
+    with pytest.raises(ValueError, match="Eval must be the last item"):
+        _ = Three[Selector("#root")][Eval("=> $.focus()")][APPEND]
+
+
+def test_class_name_escaping_uses_single_quoted_js():
+    js = Four[Selector("#item")][CLASSES][ADD]["it's\\ok"]
+    assert js == "const _0 = document.querySelector(\"#item\");\n_0?.classList.add('it\\'s\\\\ok')"
