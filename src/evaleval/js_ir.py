@@ -1,6 +1,5 @@
 import json
-
-from evaleval.adt import variant
+from dataclasses import dataclass
 
 
 class Expr:
@@ -11,69 +10,69 @@ class Stmt:
     pass
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Id(Expr):
     name: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Str(Expr):
     value: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class RawExpr(Expr):
     code: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Member(Expr):
     obj: Expr
     prop: str
     optional: bool = False
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Call(Expr):
     callee: Expr
     args: tuple[Expr, ...] = ()
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Assign(Expr):
     left: Expr
     right: Expr
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class And(Expr):
     left: Expr
     right: Expr
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Const(Stmt):
     name: str
     value: Expr
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class ExprStmt(Stmt):
     expr: Expr
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class If(Stmt):
     condition: Expr
     then: Stmt
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class RawStmt(Stmt):
     code: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Program:
     statements: tuple[Stmt, ...]
 

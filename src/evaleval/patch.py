@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from itertools import count
+from dataclasses import dataclass
 
-from evaleval.adt import variant
 from evaleval.hiccup import render
 from evaleval.js_ir import (
     And,
@@ -39,71 +39,67 @@ class Step:
         return cls.NAME or cls.__name__
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Selector(Step):
     query: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Eval(Step):
     code: str
 
-    @classmethod
-    def on_selected(cls, template: str) -> "EvalOn":
-        return EvalOn(template=template)
 
-
-@variant
+@dataclass(frozen=True, slots=True)
 class EvalOn(Step):
     template: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Hiccup(Step):
     data: list | tuple
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Text(Step):
     value: str
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Morph(Step):
     NAME = "MORPH"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Prepend(Step):
     NAME = "PREPEND"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Append(Step):
     NAME = "APPEND"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Outer(Step):
     NAME = "OUTER"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Classes(Step):
     NAME = "CLASSES"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Add(Step):
     NAME = "ADD"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Toggle(Step):
     NAME = "TOGGLE"
 
 
-@variant
+@dataclass(frozen=True, slots=True)
 class Remove(Step):
     NAME = "REMOVE"
 
