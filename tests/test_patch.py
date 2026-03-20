@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from evaleval.patch import (
@@ -18,6 +20,15 @@ from evaleval.patch import (
 )
 
 
+def assert_bound_ref(js, selector_expr, body_template):
+    first, second = js.split("\n")
+    match = re.fullmatch(r"const (_\d+) = (.+)", first)
+    assert match is not None
+    ref = match.group(1)
+    assert match.group(2).removesuffix(";") == selector_expr
+    assert second == body_template.format(ref=ref)
+
+
 def test_selector_must_precede_actions():
     with pytest.raises(ValueError, match="REMOVE requires a Selector"):
         _ = One[REMOVE]
@@ -34,18 +45,26 @@ def test_add_requires_classes_first():
 
 
 def test_data_must_be_last():
-    with pytest.raises(ValueError, match="Data must be the last item"):
+    with pytest.raises(ValueError, match="chain is already complete"):
         _ = Four[Selector("#x")][MORPH][["div"]][APPEND]
 
 
 def test_morph_chain_renders_js():
     js = Three[Selector("#app")][MORPH][["div#app", "hello"]]
-    assert js == 'const _0 = document.querySelector("#app");\nIdiomorph.morph(_0, `<div id="app">hello</div>`)'
+    assert_bound_ref(
+        js,
+        'document.querySelector("#app")',
+        'Idiomorph.morph({ref}, `<div id="app">hello</div>`)',
+    )
 
 
 def test_selector_escaping_for_quotes_and_backslashes():
     js = Two[Selector('#a"b\\c')][REMOVE]
-    assert js == 'const _0 = document.querySelector("#a\\"b\\\\c");\n_0?.remove()'
+    assert_bound_ref(
+        js,
+        'document.querySelector("#a\\"b\\\\c")',
+        "{ref}?.remove()",
+    )
 
 
 def test_eval_direct_code_passthrough():
@@ -55,7 +74,11 @@ def test_eval_direct_code_passthrough():
 
 def test_eval_arrow_substitutes_selector_var():
     js = Two[Selector("#root")][Eval("=> $.focus()")]
-    assert js == 'const _0 = document.querySelector("#root");\n_0.focus()'
+    assert_bound_ref(
+        js,
+        'document.querySelector("#root")',
+        "{ref}.focus()",
+    )
 
 
 def test_eval_arrow_without_selector_substitutes_null():
@@ -68,9 +91,21 @@ def test_classes_add_remove_toggle_emit_expected_js():
     rem_js = Four[Selector("#item")][CLASSES][REMOVE]["on"]
     tog_js = Four[Selector("#item")][CLASSES][TOGGLE]["on"]
 
-    assert add_js == "const _0 = document.querySelector(\"#item\");\n_0?.classList.add('on')"
-    assert rem_js == "const _0 = document.querySelector(\"#item\");\n_0?.classList.remove('on')"
-    assert tog_js == "const _0 = document.querySelector(\"#item\");\n_0?.classList.toggle('on')"
+    assert_bound_ref(
+        add_js,
+        'document.querySelector("#item")',
+        "{ref}?.classList.add(`on`)",
+    )
+    assert_bound_ref(
+        rem_js,
+        'document.querySelector("#item")',
+        "{ref}?.classList.remove(`on`)",
+    )
+    assert_bound_ref(
+        tog_js,
+        'document.querySelector("#item")',
+        "{ref}?.classList.toggle(`on`)",
+    )
 
 
 def test_append_prepend_outer_emit_expected_js():
@@ -78,16 +113,44 @@ def test_append_prepend_outer_emit_expected_js():
     prepend_js = Three[Selector("#list")][PREPEND][["li", "x"]]
     outer_js   = Three[Selector("#list")][OUTER][["ul#list", ["li", "x"]]]
 
-    assert append_js  == "const _0 = document.querySelector(\"#list\");\n_0.insertAdjacentHTML('beforeend', `<li>x</li>`)"
-    assert prepend_js == "const _0 = document.querySelector(\"#list\");\n_0.insertAdjacentHTML('afterbegin', `<li>x</li>`)"
-    assert outer_js   == 'const _0 = document.querySelector("#list");\n_0.outerHTML = `<ul id="list"><li>x</li></ul>`'
+    assert_bound_ref(
+        append_js,
+        'document.querySelector("#list")',
+        "{ref}.insertAdjacentHTML('beforeend', `<li>x</li>`)",
+    )
+    assert_bound_ref(
+        prepend_js,
+        'document.querySelector("#list")',
+        "{ref}.insertAdjacentHTML('afterbegin', `<li>x</li>`)",
+    )
+    assert_bound_ref(
+        outer_js,
+        'document.querySelector("#list")',
+        "{ref}.outerHTML = `<ul id=\"list\"><li>x</li></ul>`",
+    )
 
 
 def test_eval_must_be_last():
-    with pytest.raises(ValueError, match="Eval must be the last item"):
+    with pytest.raises(ValueError, match="chain is already complete"):
         _ = Three[Selector("#root")][Eval("=> $.focus()")][APPEND]
 
 
-def test_class_name_escaping_uses_single_quoted_js():
+def test_class_name_escaping_uses_template_literal_js():
     js = Four[Selector("#item")][CLASSES][ADD]["it's\\ok"]
-    assert js == "const _0 = document.querySelector(\"#item\");\n_0?.classList.add('it\\'s\\\\ok')"
+    assert_bound_ref(
+        js,
+        'document.querySelector("#item")',
+        "{ref}?.classList.add(`it's\\ok`)",
+    )
+
+
+def test_selector_refs_are_globally_unique():
+    first = Two[Selector("#a")][REMOVE]
+    second = Two[Selector("#b")][REMOVE]
+
+    first_match = re.match(r"const (_\d+) =", first)
+    second_match = re.match(r"const (_\d+) =", second)
+
+    assert first_match is not None
+    assert second_match is not None
+    assert int(second_match.group(1)[1:]) == int(first_match.group(1)[1:]) + 1

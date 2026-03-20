@@ -1,6 +1,6 @@
 from evaleval.hiccup import render, RawContent, parse_tag
 from evaleval.patch import (
-    Selector, Eval, Action,
+    Selector, Eval,
     MORPH, PREPEND, APPEND, REMOVE, OUTER, CLASSES, ADD, TOGGLE,
     DepthChain, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten,
 )
@@ -16,7 +16,7 @@ __all__ = [
     # hiccup
     "render", "RawContent", "parse_tag",
     # patch
-    "Selector", "Eval", "Action",
+    "Selector", "Eval",
     "MORPH", "PREPEND", "APPEND", "REMOVE", "OUTER", "CLASSES", "ADD", "TOGGLE",
     "DepthChain", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
     # signing
