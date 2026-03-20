@@ -1,6 +1,6 @@
 [project]
 name = "evaleval"
-version = "0.2.3"
+version = "0.2.4"
 description = "Signed snippets, hiccup, and a dual-eval loop. The web that should have been."
 readme = "README.md"
 license = "MIT"
