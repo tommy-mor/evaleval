@@ -39,7 +39,9 @@ async def do(request):
 
 Observe this example:
 ```python
-from evaleval import Signer, Three, Two, Selector, MORPH, APPEND, REMOVE
+from evaleval import Signer
+from evaleval.depth import Three, Two
+from evaleval.patch import Selector, MORPH, APPEND, REMOVE
 
 signer = Signer()
 

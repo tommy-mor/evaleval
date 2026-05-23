@@ -295,14 +295,3 @@ class DepthChain:
     def __str__(self):
         return render_program(_compile(_normalize(self.items)))
 
-
-One   = DepthChain(1)
-Two   = DepthChain(2)
-Three = DepthChain(3)
-Four  = DepthChain(4)
-Five  = DepthChain(5)
-Six   = DepthChain(6)
-Seven = DepthChain(7)
-Eight = DepthChain(8)
-Nine  = DepthChain(9)
-Ten   = DepthChain(10)

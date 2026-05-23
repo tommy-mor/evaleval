@@ -2,7 +2,6 @@ from evaleval.hiccup import render, RawContent, parse_tag
 from evaleval.patch import (
     Selector, Eval, EvalOn,
     MORPH, PREPEND, APPEND, REMOVE, OUTER, CLASSES, ADD, TOGGLE,
-    DepthChain, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten,
 )
 from evaleval.signing import (
     Signer,
@@ -19,11 +18,10 @@ __all__ = [
     # patch
     "Selector", "Eval", "EvalOn",
     "MORPH", "PREPEND", "APPEND", "REMOVE", "OUTER", "CLASSES", "ADD", "TOGGLE",
-    "DepthChain", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
     # signing
     "Signer", "SnippetExecutionError", "scrub", "apply_snippet_substitutions",
     # sse
     "exec_event", "shell_html",
-    # store
+    # store (app-level event logs — not being memory)
     "event", "JsonlStore", "to_dict", "from_dict",
 ]

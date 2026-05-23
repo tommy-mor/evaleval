@@ -2,23 +2,8 @@ import re
 
 import pytest
 
-from evaleval.patch import (
-    ADD,
-    APPEND,
-    CLASSES,
-    Eval,
-    EvalOn,
-    Four,
-    MORPH,
-    OUTER,
-    PREPEND,
-    REMOVE,
-    Selector,
-    TOGGLE,
-    Two,
-    Three,
-    One,
-)
+from evaleval.depth import One, Two, Three, Four
+from evaleval.patch import ADD, APPEND, CLASSES, Eval, EvalOn, MORPH, OUTER, PREPEND, REMOVE, Selector, TOGGLE
 
 
 def assert_bound_ref(js, selector_expr, body_template):
