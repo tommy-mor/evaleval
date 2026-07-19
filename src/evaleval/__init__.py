@@ -11,6 +11,33 @@ from evaleval.signing import (
 )
 from evaleval.sse import exec_event, shell_html
 from evaleval.store import event, JsonlStore, to_dict, from_dict
+from evaleval.state import (
+    Leaf,
+    Map,
+    List,
+    Deque,
+    Sum,
+    Record,
+    Page,
+    Path,
+    Durability,
+    Write,
+    Put,
+    Delete,
+    DeletePrefix,
+    Add,
+    ListPush,
+    ListPop,
+    DequePushBack,
+    DequePushFront,
+    DequePopFront,
+    DequePopBack,
+    encode_value,
+    decode_value,
+    encode_sum,
+    decode_sum,
+)
+from evaleval.rocks import RocksDb, RocksBatch
 
 __all__ = [
     # hiccup
@@ -24,4 +51,12 @@ __all__ = [
     "exec_event", "shell_html",
     # store (app-level event logs — not being memory)
     "event", "JsonlStore", "to_dict", "from_dict",
+    # durable state
+    "Leaf", "Map", "List", "Deque", "Sum", "Record", "Page", "Path",
+    "Durability", "Write",
+    "Put", "Delete", "DeletePrefix", "Add",
+    "ListPush", "ListPop",
+    "DequePushBack", "DequePushFront", "DequePopFront", "DequePopBack",
+    "encode_value", "decode_value", "encode_sum", "decode_sum",
+    "RocksDb", "RocksBatch",
 ]

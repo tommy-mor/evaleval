@@ -121,3 +121,93 @@ This is neceseary. Because each action is only allowed exactly once per GET. But
 Each snippet is not only a continuation, but also a capability ticket.
 
 `uv install evaleval`
+
+# Durable state
+
+`evaleval` also includes a Python-native path/reified-operation layer over
+[rocksdict](https://github.com/rocksdict/RocksDict) — the same *paths as data*
+idea as the Rust `durable` crate, idiomatic in Python.
+
+Paths both **select** and **transform**. Selectors read only the addressed
+key/prefix; transformations return plain-data operations applied atomically.
+
+```python
+from evaleval import (
+    Record, Map, Leaf, Sum, List, Deque, Durability, RocksDb,
+)
+
+Store = Record(
+    nodes=Map(Leaf()),
+    scores=Map(Sum()),
+    log=List(Leaf()),
+)
+
+db = RocksDb.open("scores.rocks")
+root = Store.root()
+
+db.apply([
+    root.scores.key("alice").add(10),   # reified Add (RMW under single-writer lock)
+    root.scores.key("alice").add(5),
+    root.nodes.key("alice").set("Alice"),
+], Durability.SYNC_WAL)
+
+assert root.scores.key("alice").get(db) == 15
+assert root.nodes.key("alice").get(db) == "Alice"
+assert "alice" in root.nodes.keys(db)
+```
+
+## Schema markers
+
+| Type | Meaning | Selectors | Transforms |
+|------|---------|-----------|------------|
+| `Leaf()` | one CBOR value | `get` | `set`, `delete` |
+| `Map(V)` | CBOR keys → sub-schema | `key`, `keys`, `entries`, `iter`, paginated variants, `len`, `contains` | `clear`, leaf/sum `set`/`delete`/`add`, `transform_values` |
+| `List(V)` | index-addressed sequence | `at`, `get`, `iter`, `len` | `push`, `pop`, `clear` |
+| `Deque(V)` | double-ended queue | `front`, `back`, `iter`, `len` | `push_back`/`front`, `pop_front`/`back`, `clear` |
+| `Sum()` | numeric accumulator | `get` (0 if absent) | `add`, `set`, `delete` |
+| `Record(...)` | named fields (stable declaration-order ids) | field navigation | `clear` |
+
+Nest freely. `Record` field ids come from declaration order — add new fields at
+the end; reordering changes the layout.
+
+## Cost model
+
+- **Blind** (no read at construction): `Leaf.set`/`delete`, `Sum.add`/`set`/`delete`,
+  collection `clear`. Ops are plain data (`Put` / `Delete` / `DeletePrefix` / `Add`).
+- **Read-modify-write**: list/deque push and pop. Operations are interpreted in
+  exact sequence against an in-batch view, then committed in one atomic write.
+- **Scan**: `Map.keys` / `iter` / `len` / `contains` / `transform_values`.
+
+For large maps, use bounded selectors rather than materializing the map:
+
+```python
+page = root.nodes.iter_page(db, limit=100)
+while True:
+    for key, value in page.items:
+        process(key, value)
+    if page.cursor is None:
+        break
+    page = root.nodes.iter_page(db, cursor=page.cursor, limit=100)
+```
+
+`keys_page`, `entries_page`, and `iter_page` return `Page(items, cursor)` in
+encoded-key order. The cursor is opaque. Backends also expose
+`scan_prefix(prefix, start=..., limit=...)`; its raw-key `start` is inclusive.
+
+`rocksdict` has no custom merge operators, so `Add` is interpreted as
+read-modify-write under the same single-writer lock and atomic batch. The
+reified `Add` API is preserved so a native-merge backend can be swapped later.
+
+## Durability
+
+Every batch commits with an explicit policy:
+
+- `Durability.SYNC_WAL` — WAL + fsync (survives power loss)
+- `Durability.WAL_ONLY` — WAL without forced fsync
+- `Durability.DISABLE_WAL` — skip WAL (rebuildable projections only)
+
+## Single-writer
+
+Not multi-process safe. One writer process; serialize writes at the application
+layer. The rocksdict backend holds a process-local lock so concurrent threads
+in the same process do not interleave batches.
