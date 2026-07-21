@@ -4,18 +4,95 @@ import uuid
 import time
 import base64
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
+
 def scrub(value: str) -> str:
-    """Escape a form value so it can't break out of an eval context."""
+    """Return a Python literal for *value*.
+
+    Retained for compatibility. Prefer :func:`bind_snippet`, which never
+    splices form data into source text.
+    """
     return repr(value)
 
 
-def apply_snippet_substitutions(snippet: str, form_data: dict[str, str]) -> str:
-    """Replace $key placeholders; longest keys first so $idx is not broken by $id."""
-    for key, value in sorted(form_data.items(), key=lambda x: len(x[0]), reverse=True):
-        snippet = snippet.replace(f"${key}", scrub(value))
-    return snippet
+def _placeholder_matches(snippet: str, form_data: Mapping[str, str]) -> list[tuple[int, int, str]]:
+    """Find non-overlapping ``$key`` spans in *snippet* (longest keys first)."""
+    matches: list[tuple[int, int, str]] = []
+    for key in sorted(form_data.keys(), key=len, reverse=True):
+        needle = f"${key}"
+        start = 0
+        while True:
+            idx = snippet.find(needle, start)
+            if idx < 0:
+                break
+            end = idx + len(needle)
+            if any(not (end <= m0 or idx >= m1) for m0, m1, _ in matches):
+                start = idx + 1
+                continue
+            matches.append((idx, end, key))
+            start = end
+    matches.sort(key=lambda m: m[0])
+    return matches
+
+
+@dataclass(frozen=True, slots=True)
+class BoundSnippet:
+    """A verified snippet with form values bound as Python locals.
+
+    Form data never enters the source string. Placeholders become synthetic
+    names; values are passed through the ``eval`` locals mapping.
+    """
+
+    source: str
+    locals_: dict[str, str]
+
+    def eval(self, globals_dict: dict[str, Any] | None = None, locals_dict: Mapping[str, Any] | None = None) -> Any:
+        """Evaluate the bound expression.
+
+        ``globals_dict`` defaults to an empty global namespace; pass
+        ``globals()`` (or a deliberate allow-list) so handler names resolve.
+        """
+        scope = dict(self.locals_)
+        if locals_dict:
+            scope = {**locals_dict, **scope}
+        return eval(self.source, globals_dict if globals_dict is not None else {}, scope)
+
+    def __call__(self, globals_dict: dict[str, Any] | None = None, locals_dict: Mapping[str, Any] | None = None) -> Any:
+        return self.eval(globals_dict, locals_dict)
+
+
+def bind_snippet(snippet: str, form_data: Mapping[str, str]) -> BoundSnippet:
+    """Bind ``$key`` placeholders to form values without source splicing.
+
+    Each placeholder in the *original* template is rewritten to a synthetic
+    identifier (``__ee_arg_N__``). Form values are supplied as locals when
+    evaluating, so nested ``$`` characters inside values cannot invent new
+    code or break out of string literals.
+    """
+    matches = _placeholder_matches(snippet, form_data)
+    locals_: dict[str, str] = {}
+    parts: list[str] = []
+    prev = 0
+    for index, (start, end, key) in enumerate(matches):
+        sym = f"__ee_arg_{index}__"
+        parts.append(snippet[prev:start])
+        parts.append(sym)
+        locals_[sym] = str(form_data[key])
+        prev = end
+    parts.append(snippet[prev:])
+    return BoundSnippet("".join(parts), locals_)
+
+
+def apply_snippet_substitutions(snippet: str, form_data: dict[str, str]) -> BoundSnippet:
+    """Bind form values into *snippet*.
+
+    Historically this returned a source string with ``repr``-spliced values,
+    which allowed RCE via nested ``$`` substitution. It now returns a
+    :class:`BoundSnippet`; call ``.eval(globals())`` to execute.
+    """
+    return bind_snippet(snippet, form_data)
 
 
 class Signer:
@@ -28,11 +105,9 @@ class Signer:
         code = "go('whale', $message)"
         hidden_fields = signer.snippet_hidden(code)
 
-        # At /do time — verify and consume
-        if not signer.verify(snippet, nonce, sig):
-            return 403
-        if not signer.consume_nonce(nonce):
-            return 403
+        # At /do time — verify, bind, eval
+        bound = signer.verify_snippet(form)
+        return bound.eval(globals())
     """
 
     def __init__(self, secret: bytes | None = None, nonce_ttl: int = 3600):
@@ -81,8 +156,8 @@ class Signer:
             ["input", {"type": "hidden", "name": "__nonce__", "value": nonce}],
         ]
 
-    def verify_snippet(self, form: Mapping[str, Any]) -> str:
-        """Verify signed form payload and return substituted snippet."""
+    def verify_snippet(self, form: Mapping[str, Any]) -> BoundSnippet:
+        """Verify signed form payload and return a :class:`BoundSnippet`."""
         snippet = str(form.get("__snippet__", ""))
         sig = str(form.get("__sig__", ""))
         nonce = str(form.get("__nonce__", ""))
@@ -95,7 +170,16 @@ class Signer:
             raise SnippetExecutionError("Invalid nonce", status_code=403)
 
         form_data = {k: str(v) for k, v in form.items() if not k.startswith("__")}
-        return apply_snippet_substitutions(snippet, form_data)
+        return bind_snippet(snippet, form_data)
+
+    def eval_snippet(
+        self,
+        form: Mapping[str, Any],
+        globals_dict: dict[str, Any] | None = None,
+        locals_dict: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """Verify, bind, and evaluate a signed snippet in one step."""
+        return self.verify_snippet(form).eval(globals_dict, locals_dict)
 
 
 class SnippetExecutionError(Exception):
