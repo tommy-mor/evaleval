@@ -26,8 +26,8 @@ from evaleval import SnippetExecutionError
 async def do(request):
     form = await request.form()
     try:
-        snippet = signer.verify_snippet(form)
-        return eval(snippet)
+        # Form values are bound as locals — never spliced into source.
+        return signer.verify_snippet(form).eval(globals())
 
     except SnippetExecutionError as e:
         return PlainTextResponse(e.message, status_code=e.status_code)
@@ -54,7 +54,7 @@ def add_form():
 ```
 All forms have a handler. In a traditional stack, it would be pointed to by a url which points to a routing table which points to a handler function. In `evaleval`, the handler is _embedded into the form itself_.
 
-The `add($new-todo-body)` is sent directly to python's `eval` with `$new-todo-body` sent through python's `repr` and spliced into the python source string. The source string must be an expression not a statement, as it must have a return value. Because as you'll see later, the result of `eval` is _returned directly to the client_.
+The signed template `add($new-todo-body)` is verified, then `$new-todo-body` is bound as a Python local (not spliced into source via `repr`). That avoids classic nested-`$` breakouts: form data never becomes code. The expression is evaluated and — as you'll see later — the result is _returned directly to the client_.
 
 So the handler function from the form is called directly with form arguments. And it returns javscript code. Now how do you write js snippets ergonomically in python? You could write them directly:
 ```python
@@ -107,8 +107,10 @@ Two[Selector("#progress-bar")][EvalOn(f"=> $.width = '{width}%'")]
 # Security
 
 Verify snippet consumes the nonce, so for each GET you can only press each button once.
-Verify snippet checks the HMAC against the provided snippet, restricting code running on the server to be only code that the server itself produces. 
+Verify snippet checks the HMAC against the provided snippet, restricting code running on the server to be only code that the server itself produces.
 So if a user can't do an action, don't sign a snippet with that action for them.
+
+`$placeholders` are rewritten to synthetic locals (`__ee_arg_N__`); form values are passed through `eval`'s locals mapping. Values are data, never source — a value containing `$x` cannot trigger further substitution or break out of a string literal.
 
 Notice this line in the todo submit form handler:
 

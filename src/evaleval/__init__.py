@@ -6,7 +6,9 @@ from evaleval.patch import (
 from evaleval.signing import (
     Signer,
     SnippetExecutionError,
+    BoundSnippet,
     scrub,
+    bind_snippet,
     apply_snippet_substitutions,
 )
 from evaleval.sse import exec_event, shell_html
@@ -46,7 +48,8 @@ __all__ = [
     "Selector", "Eval", "EvalOn",
     "MORPH", "PREPEND", "APPEND", "REMOVE", "OUTER", "CLASSES", "ADD", "TOGGLE",
     # signing
-    "Signer", "SnippetExecutionError", "scrub", "apply_snippet_substitutions",
+    "Signer", "SnippetExecutionError", "BoundSnippet",
+    "scrub", "bind_snippet", "apply_snippet_substitutions",
     # sse
     "exec_event", "shell_html",
     # store (app-level event logs — not being memory)
